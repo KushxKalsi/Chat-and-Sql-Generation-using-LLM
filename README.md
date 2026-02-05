@@ -69,7 +69,7 @@ Open your browser to: **http://localhost:5000**
 ## Architecture
 
 ```
-┌─────────────┐      HTTP       ┌──────────────┐
+┌─────────────┐      HTTP        ┌──────────────┐
 │   Browser   │ ◄──────────────► │ Flask App    │
 │  (Port 5000)│                  │ (app.py)     │
 └─────────────┘                  └──────┬───────┘
