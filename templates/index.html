@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLaMA Chat & SQL Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h2 { color: #555; margin-bottom: 15px; font-size: 1.2em; }
+        .chat-box, .sql-output { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 15px; min-height: 300px; max-height: 400px; overflow-y: auto; margin-bottom: 15px; }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 4px; }
+        .user-message { background: #007bff; color: white; text-align: right; }
+        .bot-message { background: #e9ecef; color: #333; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-family: inherit; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 1em; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .input-group { display: flex; gap: 10px; margin-top: 10px; }
+        .input-group textarea { flex: 1; }
+        .sql-output pre { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        .loading { color: #666; font-style: italic; }
+        @media (max-width: 768px) { .panels { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 LLaMA Chat & SQL Generator</h1>
+        
+        <div class="panels">
+            <div class="panel">
+                <h2>💬 Chat</h2>
+                <div class="chat-box" id="chatBox"></div>
+                <div class="input-group">
+                    <textarea id="chatInput" rows="2" placeholder="Type your message..."></textarea>
+                    <button onclick="sendChat()" id="chatBtn">Send</button>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>🗄️ SQL Query Generator</h2>
+                <textarea id="schemaInput" rows="3" placeholder="Database schema (optional)&#10;e.g., users(id, name, email), orders(id, user_id, total)"></textarea>
+                <div class="input-group">
+                    <textarea id="sqlRequest" rows="2" placeholder="Describe what you want to query...&#10;e.g., Get all users who placed orders over $100"></textarea>
+                    <button onclick="generateSQL()" id="sqlBtn">Generate</button>
+                </div>
+                <div class="sql-output" id="sqlOutput">
+                    <p style="color: #999;">Generated SQL will appear here...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function sendChat() {
+            const input = document.getElementById('chatInput');
+            const chatBox = document.getElementById('chatBox');
+            const btn = document.getElementById('chatBtn');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            chatBox.innerHTML += `<div class="message user-message">${message}</div>`;
+            input.value = '';
+            btn.disabled = true;
+            
+            chatBox.innerHTML += `<div class="message bot-message loading">Thinking...</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                const messages = chatBox.getElementsByClassName('message');
+                messages[messages.length - 1].innerHTML = data.response || data.error;
+                messages[messages.length - 1].classList.remove('loading');
+            } catch (error) {
+                const messages = chatBox.getElementsByClassName('message');
+                messages[messages.length - 1].innerHTML = 'Error: ' + error.message;
+                messages[messages.length - 1].classList.remove('loading');
+            }
+            
+            btn.disabled = false;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+        
+        async function generateSQL() {
+            const request = document.getElementById('sqlRequest').value.trim();
+            const schema = document.getElementById('schemaInput').value.trim();
+            const output = document.getElementById('sqlOutput');
+            const btn = document.getElementById('sqlBtn');
+            
+            if (!request) return;
+            
+            btn.disabled = true;
+            output.innerHTML = '<p class="loading">Generating SQL...</p>';
+            
+            try {
+                const response = await fetch('/generate-sql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request, schema })
+                });
+                
+                const data = await response.json();
+                output.innerHTML = `<pre>${data.sql || data.error}</pre>`;
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+            
+            btn.disabled = false;
+        }
+        
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
+            }
+        });
+        
+        document.getElementById('sqlRequest').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                generateSQL();
+            }
+        });
+    </script>
+</body>
+</html>
