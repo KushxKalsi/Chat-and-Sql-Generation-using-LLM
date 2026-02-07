@@ -133,37 +133,72 @@ def start_llama_server():
     """Start llama-server in the background"""
     global llama_process
     
-    # Check if we're on Windows or have llama-server
-    if os.name != 'nt':
-        print("Skipping llama-server (not on Windows)")
+    # Check if model exists
+    if not MODEL_PATH or not os.path.exists(MODEL_PATH):
+        print("Skipping llama-server (model file not found)")
+        print(f"  Looking for: {MODEL_PATH}")
+        print("  Download a smaller model for Raspberry Pi (e.g., Q4_K_M quantization)")
         return False
     
-    llama_server_path = r"C:\Users\sanify\AppData\Local\Microsoft\WinGet\Packages\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\llama-server.exe"
+    # Find llama-server
+    llama_server_path = None
     
-    if not os.path.exists(llama_server_path):
+    if os.name == 'nt':
+        # Windows
+        llama_server_path = r"C:\Users\sanify\AppData\Local\Microsoft\WinGet\Packages\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\llama-server.exe"
+    else:
+        # Linux/Raspberry Pi - check common locations
+        possible_paths = [
+            '/usr/local/bin/llama-server',
+            os.path.expanduser('~/llama.cpp/build/bin/llama-server'),
+            'llama-server'  # In PATH
+        ]
+        
+        for path in possible_paths:
+            if path == 'llama-server':
+                # Check if in PATH
+                try:
+                    subprocess.run(['which', 'llama-server'], check=True, capture_output=True)
+                    llama_server_path = 'llama-server'
+                    break
+                except:
+                    continue
+            elif os.path.exists(path):
+                llama_server_path = path
+                break
+    
+    if not llama_server_path or (llama_server_path != 'llama-server' and not os.path.exists(llama_server_path)):
         print("Error: llama-server not found")
+        print("  On Raspberry Pi, run: bash setup-llama-pi.sh")
+        print("  Or install manually: https://github.com/ggml-org/llama.cpp")
         return False
     
     print(f"Starting llama-server with model: {MODEL_PATH}")
+    print(f"Using llama-server at: {llama_server_path}")
     
-    llama_process = subprocess.Popen(
-        [
-            llama_server_path,
-            "-m", MODEL_PATH,
-            "--port", str(config.LLAMA_SERVER_PORT),
-            "--host", "127.0.0.1",
-            "-ngl", "0",
-            "-t", "4",
-            "--log-disable"
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-    )
+    try:
+        llama_process = subprocess.Popen(
+            [
+                llama_server_path,
+                "-m", MODEL_PATH,
+                "--port", str(config.LLAMA_SERVER_PORT),
+                "--host", "127.0.0.1",
+                "-ngl", "0",  # CPU only for Raspberry Pi
+                "-t", "4",    # 4 threads
+                "-c", "2048", # Context size
+                "--log-disable"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+    except Exception as e:
+        print(f"Failed to start llama-server: {e}")
+        return False
     
     # Wait for server to start
-    print("Waiting for server to start...")
-    for i in range(60):
+    print("Waiting for server to start (this may take a while on Raspberry Pi)...")
+    for i in range(120):  # Increased timeout for Pi
         try:
             response = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=2)
             if response.status_code == 200:
@@ -171,10 +206,18 @@ def start_llama_server():
                 return True
         except:
             time.sleep(2)
-            if i % 5 == 0:
+            if i % 10 == 0 and i > 0:
                 print(f"  Still waiting... ({i*2}s)")
     
-    print("Failed to start llama-server")
+    print("Failed to start llama-server (timeout)")
+    if llama_process:
+        # Print any error output
+        try:
+            stdout, stderr = llama_process.communicate(timeout=1)
+            if stderr:
+                print(f"Error output: {stderr.decode()}")
+        except:
+            pass
     return False
 
 def stop_llama_server():
@@ -189,7 +232,7 @@ atexit.register(stop_llama_server)
 
 # Start the server when the app starts
 if not start_llama_server():
-    print("WARNING: Could not start llama-server. Requests will fail.")
+    print("INFO: LLaMA features disabled. Database features still available.")
 
 @app.route('/')
 def home():
