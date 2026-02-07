@@ -23,17 +23,24 @@
         .input-group { display: flex; gap: 10px; margin-top: 10px; }
         .input-group textarea { flex: 1; }
         .sql-output pre { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        .result-section { margin-bottom: 15px; }
+        .result-section h3 { color: #333; font-size: 1em; margin-bottom: 8px; }
+        .data-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .data-table th { background: #007bff; color: white; }
+        .data-table tr:nth-child(even) { background: #f9f9f9; }
+        .analysis-box { background: #e7f3ff; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff; }
         .loading { color: #666; font-style: italic; }
         @media (max-width: 768px) { .panels { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🤖 LLaMA Chat & SQL Generator</h1>
+        <h1>🤖 LLaMA Database Assistant</h1>
         
         <div class="panels">
             <div class="panel">
-                <h2>💬 Chat</h2>
+                <h2>💬 General Chat</h2>
                 <div class="chat-box" id="chatBox"></div>
                 <div class="input-group">
                     <textarea id="chatInput" rows="2" placeholder="Type your message..."></textarea>
@@ -42,15 +49,23 @@
             </div>
             
             <div class="panel">
-                <h2>🗄️ SQL Query Generator</h2>
-                <textarea id="schemaInput" rows="3" placeholder="Database schema (optional)&#10;e.g., users(id, name, email), orders(id, user_id, total)"></textarea>
+                <h2>🗄️ Ask Your Database</h2>
                 <div class="input-group">
-                    <textarea id="sqlRequest" rows="2" placeholder="Describe what you want to query...&#10;e.g., Get all users who placed orders over $100"></textarea>
-                    <button onclick="generateSQL()" id="sqlBtn">Generate</button>
+                    <textarea id="dbQuestion" rows="3" placeholder="Ask a question about your database in natural language...&#10;e.g., How many people attended the gym today?&#10;e.g., Show me the attendance trend for the last week"></textarea>
+                    <button onclick="askDatabase()" id="dbBtn">Ask Database</button>
                 </div>
-                <div class="sql-output" id="sqlOutput">
-                    <p style="color: #999;">Generated SQL will appear here...</p>
+                <div class="sql-output" id="dbOutput">
+                    <p style="color: #999;">Ask a question to see results and insights...</p>
                 </div>
+            </div>
+        </div>
+        
+        <div class="panel" style="margin-top: 20px;">
+            <h2>📊 Database Schema</h2>
+            <button onclick="loadSchema()" style="margin-bottom: 10px;">Load Schema</button>
+            <button onclick="testConnection()" style="margin-bottom: 10px; margin-left: 10px; background: #28a745;">Test Connection</button>
+            <div class="sql-output" id="schemaOutput">
+                <p style="color: #999;">Click "Load Schema" to view your database structure...</p>
             </div>
         </div>
     </div>
@@ -92,31 +107,147 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
         
-        async function generateSQL() {
-            const request = document.getElementById('sqlRequest').value.trim();
-            const schema = document.getElementById('schemaInput').value.trim();
-            const output = document.getElementById('sqlOutput');
-            const btn = document.getElementById('sqlBtn');
+        async function askDatabase() {
+            const question = document.getElementById('dbQuestion').value.trim();
+            const output = document.getElementById('dbOutput');
+            const btn = document.getElementById('dbBtn');
             
-            if (!request) return;
+            if (!question) return;
             
             btn.disabled = true;
-            output.innerHTML = '<p class="loading">Generating SQL...</p>';
+            output.innerHTML = '<p class="loading">Analyzing your question and querying database...</p>';
             
             try {
-                const response = await fetch('/generate-sql', {
+                const response = await fetch('/ask-database', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ request, schema })
+                    body: JSON.stringify({ question })
                 });
                 
                 const data = await response.json();
-                output.innerHTML = `<pre>${data.sql || data.error}</pre>`;
+                
+                if (data.error) {
+                    output.innerHTML = `<p style="color: red;">Error: ${data.error}</p>
+                        ${data.sql ? `<pre>${data.sql}</pre>` : ''}
+                        ${data.details ? `<p>${data.details}</p>` : ''}`;
+                } else {
+                    let html = '<div class="result-section">';
+                    html += `<h3>📝 Generated SQL Query:</h3><pre>${data.sql}</pre></div>`;
+                    
+                    html += '<div class="result-section">';
+                    html += `<h3>📊 Results (${data.row_count} rows):</h3>`;
+                    
+                    if (data.row_count > 0) {
+                        html += '<table class="data-table"><thead><tr>';
+                        const keys = Object.keys(data.data[0]);
+                        keys.forEach(key => html += `<th>${key}</th>`);
+                        html += '</tr></thead><tbody>';
+                        
+                        data.data.slice(0, 10).forEach(row => {
+                            html += '<tr>';
+                            keys.forEach(key => html += `<td>${row[key] !== null ? row[key] : 'NULL'}</td>`);
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        
+                        if (data.row_count > 10) {
+                            html += `<p style="color: #666; font-style: italic;">Showing first 10 of ${data.row_count} rows</p>`;
+                        }
+                    } else {
+                        html += '<p>No results found.</p>';
+                    }
+                    html += '</div>';
+                    
+                    html += '<div class="result-section">';
+                    html += '<h3>💡 Analysis:</h3>';
+                    html += `<div class="analysis-box">${data.analysis}</div>`;
+                    html += '</div>';
+                    
+                    output.innerHTML = html;
+                }
             } catch (error) {
                 output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
             }
             
             btn.disabled = false;
+        }
+        
+        async function testConnection() {
+            const output = document.getElementById('schemaOutput');
+            output.innerHTML = '<p class="loading">Testing database connection...</p>';
+            
+            try {
+                const response = await fetch('/test-db');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    output.innerHTML = `
+                        <div style="background: #d4edda; padding: 15px; border-radius: 4px; border-left: 4px solid #28a745;">
+                            <h3 style="color: #155724; margin-top: 0;">✓ Connection Successful!</h3>
+                            <p><strong>Host:</strong> ${data.host}:${data.port}</p>
+                            <p><strong>Database:</strong> ${JSON.stringify(data.database)}</p>
+                            <p><strong>Version:</strong> ${JSON.stringify(data.version)}</p>
+                        </div>
+                    `;
+                } else {
+                    output.innerHTML = `
+                        <div style="background: #f8d7da; padding: 15px; border-radius: 4px; border-left: 4px solid #dc3545;">
+                            <h3 style="color: #721c24; margin-top: 0;">✗ Connection Failed</h3>
+                            <p><strong>Error:</strong> ${data.message}</p>
+                            <p><strong>Host:</strong> ${data.host}:${data.port}</p>
+                            <p><strong>User:</strong> ${data.user}</p>
+                            <hr>
+                            <p><strong>Troubleshooting:</strong></p>
+                            <ul style="text-align: left;">
+                                <li>Check if database server is running</li>
+                                <li>Verify credentials in .env file</li>
+                                <li>Consider using SSH tunnel (see NETWORK_SETUP.md)</li>
+                                <li>Check firewall settings</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function loadSchema() {
+            const output = document.getElementById('schemaOutput');
+            output.innerHTML = '<p class="loading">Loading schema...</p>';
+            
+            try {
+                const response = await fetch('/schema');
+                const data = await response.json();
+                
+                if (data.error) {
+                    output.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                } else {
+                    let html = '';
+                    for (const [table, columns] of Object.entries(data.schema)) {
+                        html += `<h3 style="color: #007bff; margin-top: 15px;">Table: ${table}</h3>`;
+                        html += '<table class="data-table"><thead><tr>';
+                        html += '<th>Column</th><th>Type</th><th>Null</th><th>Key</th><th>Default</th><th>Extra</th>';
+                        html += '</tr></thead><tbody>';
+                        
+                        columns.forEach(col => {
+                            html += '<tr>';
+                            html += `<td><strong>${col.Field}</strong></td>`;
+                            html += `<td>${col.Type}</td>`;
+                            html += `<td>${col.Null}</td>`;
+                            html += `<td>${col.Key || '-'}</td>`;
+                            html += `<td>${col.Default || '-'}</td>`;
+                            html += `<td>${col.Extra || '-'}</td>`;
+                            html += '</tr>';
+                        });
+                        
+                        html += '</tbody></table>';
+                    }
+                    output.innerHTML = html;
+                }
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
         }
         
         document.getElementById('chatInput').addEventListener('keypress', (e) => {
@@ -126,10 +257,10 @@
             }
         });
         
-        document.getElementById('sqlRequest').addEventListener('keypress', (e) => {
+        document.getElementById('dbQuestion').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                generateSQL();
+                askDatabase();
             }
         });
     </script>
