@@ -15,16 +15,16 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
 MODEL_PATH = os.path.abspath("llama-3.2-3b-instruct-q8_0.gguf")
-LLAMA_SERVER_URL = f"http://127.0.0.1:{os.getenv('LLAMA_SERVER_PORT', '8080')}"
+LLAMA_SERVER_URL = f"http://127.0.0.1:{os.getenv('LLAMA_SERVER_PORT', '8081')}"
 llama_process = None
 
 # Database configuration
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
+    'host': os.getenv('DB_HOST') or 'localhost',
     'port': int(os.getenv('DB_PORT', 3306)),
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'database': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER') or 'root',
+    'password': os.getenv('DB_PASSWORD') or 'kushkalsilav',
+    'database': os.getenv('DB_NAME') or 'test',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
 }
@@ -150,7 +150,7 @@ def start_llama_server():
         [
             llama_server_path,
             "-m", MODEL_PATH,
-            "--port", os.getenv('LLAMA_SERVER_PORT', '8080'),
+            "--port", str(config.LLAMA_SERVER_PORT),
             "--host", "127.0.0.1",
             "-ngl", "0",
             "-t", "4",
