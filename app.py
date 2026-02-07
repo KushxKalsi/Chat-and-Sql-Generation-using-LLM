@@ -133,6 +133,11 @@ def start_llama_server():
     """Start llama-server in the background"""
     global llama_process
     
+    # Check if we're on Windows or have llama-server
+    if os.name != 'nt':
+        print("Skipping llama-server (not on Windows)")
+        return False
+    
     llama_server_path = r"C:\Users\sanify\AppData\Local\Microsoft\WinGet\Packages\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\llama-server.exe"
     
     if not os.path.exists(llama_server_path):
@@ -198,6 +203,14 @@ def chat():
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
     
+    # Check if llama-server is available
+    try:
+        response = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=1)
+        if response.status_code != 200:
+            return jsonify({'error': 'LLaMA server not available. Chat feature requires Windows with llama-server.'}), 503
+    except:
+        return jsonify({'error': 'LLaMA server not available. Chat feature requires Windows with llama-server.'}), 503
+    
     prompt = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
     
     response = query_llama(prompt, max_tokens=512, temperature=0.7)
@@ -211,6 +224,14 @@ def ask_database():
     
     if not user_question:
         return jsonify({'error': 'No question provided'}), 400
+    
+    # Check if llama-server is available
+    try:
+        response = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=1)
+        if response.status_code != 200:
+            return jsonify({'error': 'LLaMA server not available. This feature requires Windows with llama-server. Use "Load Schema" to view database structure.'}), 503
+    except:
+        return jsonify({'error': 'LLaMA server not available. This feature requires Windows with llama-server. Use "Load Schema" to view database structure.'}), 503
     
     # Step 1: Get database schema
     schema = get_table_schema()
