@@ -5,14 +5,21 @@ import time
 import os
 import atexit
 import pymysql
-from dotenv import load_dotenv
 import json
 
-# Load environment variables
-load_dotenv()
+# Import configuration
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except:
+    pass
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+# Configuration
+LLAMA_SERVER_PORT = int(os.getenv('LLAMA_SERVER_PORT', '8081'))
+FLASK_PORT = int(os.getenv('FLASK_PORT', '5000'))
 
 MODEL_PATH = os.path.abspath("llama-3.2-3b-instruct-q8_0.gguf")
 
@@ -39,7 +46,7 @@ if not os.path.exists(MODEL_PATH):
         for name in possible_models:
             print(f"  - {name}")
 
-LLAMA_SERVER_URL = f"http://127.0.0.1:{os.getenv('LLAMA_SERVER_PORT', '8081')}"
+LLAMA_SERVER_URL = f"http://127.0.0.1:{LLAMA_SERVER_PORT}"
 llama_process = None
 
 # Database configuration
@@ -205,7 +212,7 @@ def start_llama_server():
             [
                 llama_server_path,
                 "-m", MODEL_PATH,
-                "--port", str(config.LLAMA_SERVER_PORT),
+                "--port", str(LLAMA_SERVER_PORT),
                 "--host", "127.0.0.1",
                 "-ngl", "0",  # CPU only for Raspberry Pi
                 "-t", "4",    # 4 threads
@@ -448,4 +455,4 @@ Generate a SQL query for: {user_request}<|eot_id|><|start_header_id|>assistant<|
     return jsonify({'sql': sql_query})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('FLASK_PORT', 5000)), use_reloader=False)
+    app.run(debug=True, host='0.0.0.0', port=FLASK_PORT, use_reloader=False)
