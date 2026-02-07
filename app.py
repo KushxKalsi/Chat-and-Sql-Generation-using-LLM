@@ -60,17 +60,6 @@ def get_db_connection():
 
 def get_table_schema():
     """Get schema information for all tables in the database"""
-    if USE_API:
-        try:
-            response = requests.get(f"{DB_API_URL}/schema", timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('schema')
-            return None
-        except Exception as e:
-            print(f"API error: {e}")
-            return None
-    
     connection = get_db_connection()
     if not connection:
         return None
@@ -97,26 +86,6 @@ def get_table_schema():
 
 def execute_query(sql_query):
     """Execute a SQL query and return results"""
-    if USE_API:
-        try:
-            response = requests.post(
-                f"{DB_API_URL}/query",
-                json={'query': sql_query},
-                timeout=30
-            )
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return {
-                    "success": False,
-                    "error": f"API returned {response.status_code}"
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
     connection = get_db_connection()
     if not connection:
         return {"error": "Database connection failed"}
