@@ -15,6 +15,30 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
 MODEL_PATH = os.path.abspath("llama-3.2-3b-instruct-q8_0.gguf")
+
+# Check for alternative model names
+if not os.path.exists(MODEL_PATH):
+    # Try common model names
+    possible_models = [
+        "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+        "llama-3.2-3b-instruct-q4_k_m.gguf",
+        "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+        "llama-3.2-1b-instruct-q4_k_m.gguf",
+        "llama-3.2-3b-instruct-q8_0.gguf"
+    ]
+    
+    for model_name in possible_models:
+        model_path = os.path.abspath(model_name)
+        if os.path.exists(model_path):
+            MODEL_PATH = model_path
+            print(f"Found model: {MODEL_PATH}")
+            break
+    else:
+        MODEL_PATH = None
+        print("No model file found. Checked:")
+        for name in possible_models:
+            print(f"  - {name}")
+
 LLAMA_SERVER_URL = f"http://127.0.0.1:{os.getenv('LLAMA_SERVER_PORT', '8081')}"
 llama_process = None
 
